@@ -1,0 +1,9 @@
+﻿i @peripherals/TFL_BusDelayModel.cs
+using sysbus
+mach create "nucleo_f103rb_tfl_bus"
+machine LoadPlatformDescription @platforms/nucleo_f103rb_tfl.repl
+sysbus.cpu PerformanceInMips 72
+showAnalyzer sysbus.usart2
+sysbus LoadELF @firmware/binaries/timing_probe_nucleo_f103rb.elf
+logLevel 1 tfl_bus
+start

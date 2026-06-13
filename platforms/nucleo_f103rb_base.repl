@@ -1,0 +1,2 @@
+﻿# nucleo_f103rb_base.repl
+using "platforms/cpus/stm32f103.repl"

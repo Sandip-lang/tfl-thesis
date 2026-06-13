@@ -1,0 +1,12 @@
+﻿# Pinned tool versions — do not update during thesis
+
+Renode:       1.15.3
+Zephyr SDK:   0.16.8
+Zephyr RTOS:  3.6.0
+west:         1.2.0
+GCC ARM:      12.2.1 (zephyr-sdk-0.16.8)
+Windows:      11
+Python:       3.11
+numpy:        1.24.3
+pandas:       2.0.3
+matplotlib:   3.7.2

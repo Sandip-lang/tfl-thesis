@@ -1,0 +1,8 @@
+﻿using sysbus
+mach create "nucleo_f103rb_baseline"
+machine LoadPlatformDescription @platforms/cpus/stm32f103.repl
+sysbus.cpu PerformanceInMips 72
+showAnalyzer sysbus.usart2
+sysbus LoadELF @firmware/binaries/timing_probe_nucleo_f103rb.elf
+logLevel 3
+start
