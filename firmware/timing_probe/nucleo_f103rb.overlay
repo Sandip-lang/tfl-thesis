@@ -1,0 +1,37 @@
+﻿/ {
+    timing_markers {
+        compatible = "gpio-leds";
+
+        marker0: marker_0 {
+            gpios = <&gpioa 0 GPIO_ACTIVE_HIGH>;
+            label = "TIMING_MARKER_0";
+        };
+
+        marker1: marker_1 {
+            gpios = <&gpioa 1 GPIO_ACTIVE_HIGH>;
+            label = "TIMING_MARKER_1";
+        };
+
+        marker2: marker_2 {
+            gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;
+            label = "TIMING_MARKER_2";
+        };
+
+        marker3: marker_3 {
+            gpios = <&gpioa 8 GPIO_ACTIVE_HIGH>;
+            label = "TIMING_MARKER_3";
+        };
+    };
+
+    aliases {
+        marker0 = &marker0;
+        marker1 = &marker1;
+        marker2 = &marker2;
+        marker3 = &marker3;
+    };
+};
+
+&usart2 {
+    status = "okay";
+    current-speed = <115200>;
+};
