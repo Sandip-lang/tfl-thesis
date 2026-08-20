@@ -1,0 +1,146 @@
+{
+  "T1": {
+    "expected": 0.002,
+    "phys_mean": 0.00299087976496626,
+    "phys_std": 0.0004105947041559372,
+    "ren_mean": 0.0019994579391596798,
+    "ren_std": 8.132166979315195e-05,
+    "tfl_mean": 0.0019986823411969586,
+    "tfl_std": 3.967280172111069e-05,
+    "jitter_ratio": 0.1980582529926331,
+    "tfl_jitter_ratio": 0.09662277988379413,
+    "mean_diff_us": -991.4218258065804,
+    "p_value": 0.0,
+    "effect_r": -0.9966811854793938,
+    "phys_gaussian": false,
+    "renode_gaussian": false
+  },
+  "T2": {
+    "expected": 0.02,
+    "phys_mean": 0.020981299769306697,
+    "phys_std": 0.00040019393076690286,
+    "ren_mean": 0.01999183684354316,
+    "ren_std": 8.384228316267934e-05,
+    "tfl_mean": 0.01999033910193424,
+    "tfl_std": 0.0004184069223508827,
+    "jitter_ratio": 0.2095041346629371,
+    "tfl_jitter_ratio": 1.0455104142860883,
+    "mean_diff_us": -989.4629257635353,
+    "p_value": 8.450000013799047e-83,
+    "effect_r": -0.9984516378768085,
+    "phys_gaussian": false,
+    "renode_gaussian": false
+  },
+  "T3": {
+    "expected": 0.2,
+    "phys_mean": 0.20101448447377027,
+    "phys_std": 0.00039867392939518353,
+    "ren_mean": 0.2000113861687738,
+    "ren_std": 6.939096092148898e-05,
+    "tfl_mean": 0.2008560372201685,
+    "tfl_std": 0.0039910259619537125,
+    "jitter_ratio": 0.17405442344012803,
+    "tfl_jitter_ratio": 10.010752315829581,
+    "mean_diff_us": -1003.0983049964526,
+    "p_value": 3.06366423367317e-09,
+    "effect_r": -1.0,
+    "phys_gaussian": true,
+    "renode_gaussian": true
+  },
+  "T6": {
+    "expected": 0.02,
+    "phys_mean": 0.020000100681560825,
+    "phys_std": 1.2568078233634283e-06,
+    "ren_mean": 0.020000635668573217,
+    "ren_std": 2.936180440677655e-05,
+    "tfl_mean": 0.019999738849038065,
+    "tfl_std": 8.513355514558222e-06,
+    "jitter_ratio": 23.36220690304063,
+    "tfl_jitter_ratio": 6.773792584911714,
+    "mean_diff_us": 0.5349870123919076,
+    "p_value": 0.8509673653505556,
+    "effect_r": 0.009727999999999959,
+    "phys_gaussian": true,
+    "renode_gaussian": false
+  },
+  "T7": {
+    "expected": 0.01,
+    "phys_mean": 0.01000061935837302,
+    "phys_std": 8.742009757517357e-06,
+    "ren_mean": 0.01000422334730355,
+    "ren_std": 5.752215065972804e-05,
+    "tfl_mean": 0.009999680905091755,
+    "tfl_std": 1.1559947498231682e-05,
+    "jitter_ratio": 6.579968709170574,
+    "tfl_jitter_ratio": 1.3223443829139114,
+    "mean_diff_us": 3.6039889305308077,
+    "p_value": 0.19412402967932607,
+    "effect_r": 0.06713599999999997,
+    "phys_gaussian": false,
+    "renode_gaussian": false
+  },
+  "T8": {
+    "expected": 0.01,
+    "phys_mean": 0.009999786322742505,
+    "phys_std": 2.2170593313542396e-05,
+    "ren_mean": 0.010005614757412023,
+    "ren_std": 9.012934858592018e-05,
+    "tfl_mean": 0.009999612630428137,
+    "tfl_std": 2.4575749345559674e-05,
+    "jitter_ratio": 4.065265521372707,
+    "tfl_jitter_ratio": 1.1084840625599381,
+    "mean_diff_us": 5.828434669518518,
+    "p_value": 0.1631879555405571,
+    "effect_r": 0.07209600000000005,
+    "phys_gaussian": false,
+    "renode_gaussian": false
+  },
+  "T9": {
+    "expected": 0.002,
+    "phys_mean": 0.002000046752140895,
+    "phys_std": 8.984327964063923e-07,
+    "ren_mean": 0.0020005092442416986,
+    "ren_std": 1.4624086864576161e-05,
+    "tfl_mean": 0.002000019318386858,
+    "tfl_std": 1.4614343086151795e-06,
+    "jitter_ratio": 16.277329726909457,
+    "tfl_jitter_ratio": 1.626648442110212,
+    "mean_diff_us": 0.4624921008038012,
+    "p_value": 0.007699644616296041,
+    "effect_r": 0.043523199999999984,
+    "phys_gaussian": false,
+    "renode_gaussian": false
+  },
+  "quantum": [
+    {
+      "quantum_us": 10000,
+      "std_us": 2932.7971922476327,
+      "jitter_ratio": 2269.691924232053,
+      "wall_clock_s": 0.0045000000000000005
+    },
+    {
+      "quantum_us": 1000,
+      "std_us": 301.5186621163299,
+      "jitter_ratio": 233.34531082465082,
+      "wall_clock_s": 0.045
+    },
+    {
+      "quantum_us": 100,
+      "std_us": 28.6003717663771,
+      "jitter_ratio": 22.133829437565648,
+      "wall_clock_s": 0.45
+    },
+    {
+      "quantum_us": 10,
+      "std_us": 2.867628722531528,
+      "jitter_ratio": 2.2192580415823473,
+      "wall_clock_s": 4.5
+    },
+    {
+      "quantum_us": 1,
+      "std_us": 0.2910342972698949,
+      "jitter_ratio": 0.22523146023670101,
+      "wall_clock_s": 45.0
+    }
+  ]
+}
