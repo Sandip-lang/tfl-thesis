@@ -1,0 +1,5 @@
+Metric,Value,Notes
+Min HIGH pulse,257 ns,GPIO driver + bus call
+Mean HIGH,261 ns,Systematic offset
+Std deviation,10 ns,Measurement noise floor
+Corresponding CPU cycles,18,14 driver + 4 bus
