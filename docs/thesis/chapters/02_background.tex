@@ -1,0 +1,133 @@
+% =====================================================================
+\chapter{Background}
+\label{ch:background}
+% =====================================================================
+
+\section{Timing in Embedded Systems}
+\label{sec:bg:timing}
+
+Embedded firmware interacts with the physical world through deadlines:
+a PWM edge must occur every control period, a sensor must be sampled at
+a fixed rate, a bus frame must be acknowledged within a protocol
+timeout. Two properties characterise the timing behaviour of such a
+system:
+
+\begin{description}
+  \item[Accuracy] --- how close the \emph{mean} of an observed interval
+        is to its nominal value (e.g.\ a \SI{10}{\milli\second} timer
+        firing every \SI{10.001}{\milli\second} on average).
+  \item[Jitter] --- the \emph{variance} of the interval around its
+        mean, typically reported as a standard deviation or a
+        percentile bound.
+\end{description}
+
+Real microcontrollers derive their notion of time from a crystal or RC
+oscillator whose frequency exhibits static offset (specified in parts
+per million, ppm), temperature drift, and cycle-to-cycle jitter. On top
+of this physical layer, the RTOS adds software-induced timing effects:
+tick quantisation, scheduling latency, priority inversion, and
+interrupt masking windows. Any faithful emulation of firmware timing
+must account for both layers.
+
+\section{The Target Platform: STM32F103RB and Zephyr RTOS}
+\label{sec:bg:platform}
+
+All experiments in this thesis use the ST NUCLEO-F103RB development
+board. Its STM32F103RB microcontroller~\cite{stm32rm0008} integrates an
+Arm Cortex-M3 core~\cite{armcm3trm} clocked at \SI{72}{\mega\hertz},
+\SI{20}{\kilo\byte} SRAM, and \SI{128}{\kilo\byte} flash. Three
+properties make it a good measurement target:
+
+\begin{itemize}
+  \item The Cortex-M3 has a well-documented, deterministic interrupt
+        model with a minimum interrupt latency of 12 cycles
+        (\SI{167}{\nano\second} at \SI{72}{\mega\hertz})~\cite{armcm3trm}.
+  \item The Data Watchpoint and Trace (DWT) unit provides a free-running
+        CPU cycle counter (\texttt{DWT\_CYCCNT}), enabling
+        cycle-granular self-instrumentation.
+  \item The platform is fully supported by both Zephyr and Renode,
+        allowing bit-identical firmware to run in both environments.
+\end{itemize}
+
+The firmware is built on Zephyr RTOS~3.6.0~\cite{zephyr}, a
+widely-deployed open-source RTOS. Zephyr's kernel timing primitives
+used in this work are:
+
+\begin{itemize}
+  \item \ksleep{} --- suspends the calling thread for a given number of
+        ticks. With the default \SI{1000}{\hertz} tick rate, requested
+        durations are rounded \emph{up} to the next tick boundary,
+        introducing a systematic $0$--$1$\,\ms{} quantisation delay.
+  \item \texttt{k\_busy\_wait()} --- spins on the cycle counter without
+        yielding, providing sub-tick delays.
+  \item \ktimer{} --- hardware-timer-backed periodic callbacks,
+        dispatched from the system clock interrupt independent of the
+        scheduler tick.
+  \item Thread scheduling --- preemptive, priority-based scheduling
+        with optional time slicing.
+\end{itemize}
+
+\section{Firmware Rehosting}
+\label{sec:bg:rehosting}
+
+Rehosting (also \emph{re-hosting} or firmware emulation) denotes the
+execution of firmware compiled for an embedded target inside a
+software environment on a host machine~\cite{fasano2021sok}. Depending
+on how much of the hardware is modelled, approaches range from
+high-level API interception (HALucinator~\cite{clements2020halucinator})
+over automatically inferred peripheral models
+(P$^2$IM~\cite{feng2020p2im}, Pretender~\cite{gustafson2019pretender},
+$\mu$Emu~\cite{zhou2021uemu}) to full-system emulation with hand-written
+peripheral models (QEMU~\cite{bellard2005qemu}, Renode~\cite{renode}).
+Full-system emulation offers the strongest fidelity guarantees for
+\emph{functional} behaviour because the unmodified binary executes
+against a complete register-level model of the SoC.
+
+\section{The Renode Emulation Framework}
+\label{sec:bg:renode}
+
+Renode~\cite{renode} is an open-source emulation framework by Antmicro,
+targeted specifically at embedded and multi-node IoT systems. Its
+architecture is relevant to this thesis in four respects.
+
+\paragraph{Platform descriptions.} A machine is assembled from a
+\texttt{.repl} (Renode platform) file that instantiates peripherals at
+bus addresses. Peripherals are C\# classes loaded at runtime; users can
+add custom peripherals \emph{without recompiling Renode}. This
+extension mechanism is the foundation of the Temporal Fidelity Layer.
+
+\paragraph{Translation-based CPU emulation.} Guest instructions are
+executed through a translation library derived from tlibs. Renode does
+not simulate microarchitectural effects (pipeline, caches, flash wait
+states); instead, each CPU is assigned a nominal performance in MIPS
+(here: 72), and executed instruction counts are converted into virtual
+time at that fixed rate. Deviation source \srcS{1}
+(\cref{sec:problem:sources}) follows directly from this abstraction.
+
+\paragraph{Quantum-based virtual time.} Virtual time advances in
+discrete slices called \emph{quanta} (default \SI{100}{\micro\second}).
+Each CPU executes up to one quantum's worth of instructions before
+synchronising with the emulation's master clock. Timer interrupts,
+inter-peripheral events, and cross-machine messages are therefore
+aligned to quantum boundaries, which quantises event timing
+(source \srcS{4}).
+
+\paragraph{Deterministic execution.} Given identical inputs, a Renode
+simulation is deterministic: there is no analog noise, no oscillator
+drift (source \srcS{3}), and no physical transmission delay between
+emulated nodes (source \srcS{5}). Determinism is desirable for
+reproducible debugging, but it is precisely the property that separates
+emulated timing from physical timing.
+
+\section{Measurement Instrumentation}
+\label{sec:bg:instrumentation}
+
+On physical hardware, firmware-internal events are made externally
+observable by toggling GPIO pins, captured with a Saleae Logic~8
+analyser~\cite{saleae} at \SI{100}{\mega\sample\per\second} (\SI{10}{\nano\second}
+resolution). GPIO instrumentation was chosen over trace units (ITM/ETM)
+because the identical mechanism exists in Renode: the emulated GPIO
+port is hooked to log state changes with virtual-time timestamps,
+yielding structurally identical traces from both worlds. The
+instrumentation cost itself is quantified in
+\cref{sec:eval:instrumentation}.

@@ -1,0 +1,110 @@
+% =====================================================================
+\chapter{Introduction}
+\label{ch:introduction}
+% =====================================================================
+
+\section{Motivation}
+\label{sec:intro:motivation}
+
+Embedded systems increasingly control safety- and time-critical
+processes: motor controllers, medical devices, automotive electronic
+control units, and industrial field buses all depend on firmware that
+must react \emph{correctly} and \emph{on time}. Development and
+verification of such firmware traditionally requires physical hardware,
+which is expensive to scale, difficult to automate, and awkward to
+instrument. \emph{Rehosting}---running unmodified firmware binaries
+inside a full-system emulator---removes these obstacles and has become
+a cornerstone of modern embedded workflows, from continuous-integration
+testing~\cite{renode} to large-scale firmware security
+analysis~\cite{fasano2021sok,wright2021challenges}.
+
+Emulation frameworks such as Renode~\cite{renode} and
+QEMU~\cite{bellard2005qemu} model the \emph{functional} contract of a
+microcontroller: instruction semantics, memory maps, peripheral
+registers, and interrupt controllers. Firmware that passes functional
+tests in the emulator will, in most cases, execute the same logic on
+real silicon. The \emph{temporal} contract, however, is a different
+matter. Emulators advance virtual time in discrete scheduling quanta,
+dispatch interrupts at quantum boundaries, execute instruction blocks at
+an idealised rate, and omit analog-world phenomena such as crystal
+oscillator drift, temperature-dependent jitter, and bus propagation
+delay. As a result, a rehosted firmware image experiences a timing
+environment that can differ from the physical one by orders of
+magnitude---in either direction.
+
+This discrepancy matters. A control loop that misses its deadline only
+under real-world scheduling jitter will appear healthy in the emulator.
+Conversely, quantum-induced noise in the emulator can trigger spurious
+timeouts that never occur on hardware. In both cases the emulator's
+verdict is misleading, undermining the very purpose of rehosted
+testing. Despite this, the temporal accuracy of modern rehosting
+frameworks has received little systematic, hardware-grounded
+quantification.
+
+\section{Problem Statement}
+\label{sec:intro:problem}
+
+This thesis addresses two questions:
+
+\begin{enumerate}
+  \item \textbf{RQ1 --- Quantification.} How large is the temporal
+        deviation between an unmodified firmware image running on a
+        physical Arm Cortex-M3 microcontroller and the same image
+        rehosted in Renode, across representative RTOS timing
+        primitives (sleeps, hardware timers, thread scheduling,
+        interrupt service latency), and which mechanisms cause it?
+  \item \textbf{RQ2 --- Mitigation.} Can the deviation be reduced by a
+        lightweight, non-invasive extension layer---without modifying
+        the emulator core, without patching the firmware, and without
+        sacrificing the usability that makes rehosting attractive in
+        the first place?
+\end{enumerate}
+
+\section{Contributions}
+\label{sec:intro:contributions}
+
+The thesis makes the following contributions:
+
+\begin{itemize}
+  \item \textbf{A measurement methodology and instrumented firmware}
+        for comparing physical and virtual timing behaviour. A Zephyr
+        RTOS firmware exercises ten timing scenarios and exposes each
+        event as a GPIO edge, captured on hardware by a
+        \SI{100}{\mega\sample\per\second} logic analyser and in Renode by a GPIO
+        tracing hook (\cref{ch:problem}).
+  \item \textbf{A taxonomy of five temporal deviation sources}
+        (\srcS{1}--\srcS{5}), separating instruction-timing
+        abstraction, interrupt delivery latency, clock drift and
+        jitter, scheduler quantisation, and inter-node propagation
+        delay (\cref{sec:problem:sources}).
+  \item \textbf{The Temporal Fidelity Layer (TFL)}, three composable
+        Renode peripheral models written in C\# that inject or monitor
+        the missing temporal effects: \texttt{TFL\_ClockModel}
+        (\srcS{3}), \texttt{TFL\_DeadlineMonitor} (\srcS{4}), and
+        \texttt{TFL\_BusDelayModel} (\srcS{5}). TFL attaches purely via
+        Renode platform descriptions and works with stock
+        Renode~1.15.3 (\cref{ch:design}).
+  \item \textbf{A statistical evaluation} of baseline Renode and
+        TFL-enhanced Renode against hardware ground truth, including
+        distribution comparisons, Mann--Whitney significance tests,
+        a quantum-sensitivity study, and a workload-interference study
+        (\cref{ch:evaluation}).
+  \item \textbf{Open research artefacts}: firmware, peripheral models,
+        platform files, capture data, and the full analysis pipeline
+        are available in the accompanying repository
+        (\cref{app:reproducibility}).
+\end{itemize}
+
+\section{Thesis Outline}
+\label{sec:intro:outline}
+
+\cref{ch:background} introduces the technical background on embedded
+timing, the STM32F103 platform, Zephyr RTOS, and the Renode emulation
+framework. \cref{ch:relatedwork} surveys related work on rehosting and
+timing-accurate simulation. \cref{ch:problem} develops the measurement
+methodology and the deviation-source taxonomy, and presents the
+baseline characterisation of Renode against hardware.
+\cref{ch:design} describes the design and implementation of the
+Temporal Fidelity Layer. \cref{ch:evaluation} evaluates TFL
+quantitatively. \cref{ch:conclusion} concludes and outlines future
+work.

@@ -1,0 +1,79 @@
+% =====================================================================
+\chapter{Conclusion and Future Work}
+\label{ch:conclusion}
+% =====================================================================
+
+\section{Summary}
+\label{sec:conclusion:summary}
+
+This thesis set out to quantify and reduce the temporal gap between
+firmware running on physical hardware and the same firmware rehosted in
+the Renode emulation framework.
+
+On the \emph{quantification} side (RQ1), a twin measurement
+methodology---bit-identical firmware, GPIO-edge observables, a common
+statistical pipeline---revealed that the gap is not a simple slowdown
+or speedup. Baseline Renode reproduces \emph{mean} timing to within
+fractions of a percent, yet distorts timing \emph{variance}
+bidirectionally: tick-quantised sleeps appear $5\times$ too
+deterministic, while timer callbacks and ISR latencies appear up to
+$23\times$ too noisy, an artefact of the \SI{100}{\micro\second}
+scheduling quantum. A taxonomy of five deviation sources
+(\srcS{1}--\srcS{5}) attributes each effect to a specific emulation
+mechanism.
+
+On the \emph{mitigation} side (RQ2), the Temporal Fidelity Layer
+demonstrates that a substantial share of fidelity can be recovered
+without modifying either the emulator or the firmware: three
+runtime-loaded C\# peripherals inject calibrated clock drift and
+jitter, monitor scheduler wakeup deviation, and model inter-node
+propagation delay, all configured declaratively in platform files.
+Across seven statistically evaluated scenarios, TFL reduced the
+geometric-mean jitter-ratio fold error from $7.6\times$ to $2.9\times$
+and brought four scenarios within a factor of $1.7$ of hardware
+variance. The evaluation also exposed a miscalibration (proportional
+rather than absolute sleep jitter) that only hardware-grounded
+measurement could reveal---underlining the thesis's central
+methodological claim: emulator fidelity must be \emph{measured}, not
+assumed.
+
+\section{Future Work}
+\label{sec:conclusion:future}
+
+\subsection{Model Calibration from Traces}
+\label{sec:future:calibration}
+
+The T3 regression shows that hand-parameterised models have limits. A
+natural next step is closing the loop: derive TFL parameters
+automatically from a short hardware characterisation run (e.g.\ fit an
+absolute uniform tick-rounding term plus a load-dependent Gaussian
+term per primitive), turning TFL into a self-calibrating fidelity
+layer.
+
+\subsection{Addressing S1 and S2}
+\label{sec:future:s1s2}
+
+Instruction-timing abstraction and interrupt recognition granularity
+remain untouched by TFL. Promising directions include per-block timing
+annotations derived from cycle-accurate reference runs, and
+finer-grained interrupt scheduling below the quantum---ideally
+upstreamed into Renode's core rather than layered on top.
+
+\subsection{Generalisation}
+\label{sec:future:generalisation}
+
+The methodology transfers directly to other targets (Cortex-M4/M7 with
+caches, RISC-V), other RTOSes (FreeRTOS, RIOT), and multi-node setups
+where \srcS{5} dominates. Multi-node experiments with
+\texttt{TFL\_BusDelayModel} on realistic protocols (CAN, BLE mesh)
+would test whether distribution-level fidelity suffices to expose real
+protocol race conditions in emulation.
+
+\subsection{Fidelity as a CI Metric}
+\label{sec:future:ci}
+
+Finally, the jitter-ratio metric and the deadline-monitor CSV stream
+are cheap enough to run in continuous integration. Tracking $J$ per
+release would let projects detect fidelity regressions in their
+emulated test environments the same way they track code coverage
+today.

@@ -1,0 +1,167 @@
+% =====================================================================
+%  Temporal Accuracy in Rehosted Firmware
+%  A Temporal Fidelity Layer for the Renode Emulation Framework
+%
+%  MSc Thesis — Sandip Kumar Mourya — Saarland University
+%
+%  Build:  pdflatex -> bibtex -> pdflatex -> pdflatex
+%          (or simply upload the docs/thesis folder to Overleaf
+%           and set main.tex as the root document)
+% =====================================================================
+\documentclass[11pt,a4paper,twoside,openright]{report}
+
+% ----- encoding & fonts ----------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+
+% ----- page layout ---------------------------------------------------
+\usepackage[a4paper,
+            inner=3.0cm, outer=2.5cm,
+            top=2.5cm, bottom=2.5cm,
+            headheight=14pt]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{emptypage}          % no headers/footers on blank pages
+
+% ----- headers -------------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE]{\nouppercase{\leftmark}}
+\fancyhead[RO]{\nouppercase{\rightmark}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ----- math, units, tables -------------------------------------------
+\usepackage{amsmath,amssymb}
+\usepackage{siunitx}
+\sisetup{range-units=single, per-mode=symbol}
+\DeclareSIUnit\sample{S}     % logic-analyser sample
+\DeclareSIUnit\baud{Bd}
+\DeclareSIUnit\byte{B}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+
+% ----- graphics & diagrams -------------------------------------------
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.misc,fit,calc}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+\usepackage{subcaption}
+
+% ----- code listings --------------------------------------------------
+\usepackage{listings}
+\usepackage{xcolor}
+\definecolor{codegray}{gray}{0.95}
+\definecolor{codecomment}{rgb}{0.30,0.45,0.30}
+\definecolor{codekw}{rgb}{0.10,0.15,0.55}
+\definecolor{codestr}{rgb}{0.55,0.25,0.10}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecomment}\itshape,
+  stringstyle=\color{codestr},
+  backgroundcolor=\color{codegray},
+  frame=single, framerule=0.2pt, rulecolor=\color{black!25},
+  numbers=left, numberstyle=\tiny\color{black!50}, numbersep=6pt,
+  breaklines=true, showstringspaces=false, tabsize=4,
+  captionpos=b,
+  aboveskip=1.0em, belowskip=1.0em
+}
+\lstdefinelanguage{repl}{
+  morekeywords={using,frequency},
+  sensitive=false,
+  morecomment=[l]{//},
+  morestring=[b]"
+}
+\lstdefinelanguage{resc}{
+  morekeywords={mach,create,machine,LoadPlatformDescription,LoadELF,
+                start,showAnalyzer,logLevel,using,sysbus,include},
+  sensitive=false,
+  morecomment=[l]{\#},
+  morestring=[b]"
+}
+
+% ----- bibliography ---------------------------------------------------
+\usepackage[numbers,sort&compress]{natbib}
+\bibliographystyle{abbrvnat}
+
+% ----- hyperlinks (load last, cleveref after) --------------------------
+\usepackage[hidelinks,
+            pdftitle={Temporal Accuracy in Rehosted Firmware},
+            pdfauthor={Sandip Kumar Mourya}]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+% ----- convenience macros ---------------------------------------------
+\newcommand{\TFL}{TFL}
+\newcommand{\us}{\si{\micro\second}}
+\newcommand{\ns}{\si{\nano\second}}
+\newcommand{\ms}{\si{\milli\second}}
+\newcommand{\ksleep}{\texttt{k\_sleep()}}
+\newcommand{\ktimer}{\texttt{k\_timer}}
+\newcommand{\srcS}[1]{\textbf{S#1}}
+
+% =====================================================================
+\begin{document}
+
+% ---------------------------------------------------------------------
+%  FRONT MATTER
+% ---------------------------------------------------------------------
+\pagenumbering{roman}
+\pagestyle{empty}
+
+\input{frontmatter/titlepage}
+\cleardoublepage
+
+\input{frontmatter/declaration}
+\cleardoublepage
+
+\pagestyle{plain}
+\input{frontmatter/abstract}
+\cleardoublepage
+
+\input{frontmatter/acknowledgements}
+\cleardoublepage
+
+\tableofcontents
+\cleardoublepage
+\listoffigures
+\cleardoublepage
+\listoftables
+\cleardoublepage
+
+% ---------------------------------------------------------------------
+%  MAIN MATTER
+% ---------------------------------------------------------------------
+\pagenumbering{arabic}
+\pagestyle{fancy}
+
+\input{chapters/01_introduction}
+\input{chapters/02_background}
+\input{chapters/03_related_work}
+\input{chapters/04_problem_analysis}
+\input{chapters/05_design_implementation}
+\input{chapters/06_evaluation}
+\input{chapters/07_conclusion}
+
+% ---------------------------------------------------------------------
+%  BIBLIOGRAPHY
+% ---------------------------------------------------------------------
+\cleardoublepage
+\phantomsection
+\addcontentsline{toc}{chapter}{Bibliography}
+\bibliography{references}
+
+% ---------------------------------------------------------------------
+%  APPENDICES
+% ---------------------------------------------------------------------
+\appendix
+\input{appendix/appendix_a}
+\input{appendix/appendix_b}
+
+\end{document}

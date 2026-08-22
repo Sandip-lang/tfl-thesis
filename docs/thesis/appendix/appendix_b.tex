@@ -1,0 +1,79 @@
+% =====================================================================
+\chapter{Reproducibility}
+\label{app:reproducibility}
+% =====================================================================
+
+\section{Research Artefacts}
+
+All firmware sources, TFL peripheral models, platform descriptions,
+Renode scripts, raw captures, and the complete analysis pipeline are
+available in the accompanying repository:
+
+\begin{center}
+  \url{https://github.com/Sandip-lang/tfl-thesis}
+\end{center}
+
+\begin{table}[hb]
+  \centering
+  \caption[Repository layout]{Repository layout.}
+  \label{tab:repo}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Path & Content \\
+    \midrule
+    \texttt{peripherals/}        & TFL C\# peripheral models (S3, S4, S5) \\
+    \texttt{platforms/}          & Renode \texttt{.repl} platform descriptions \\
+    \texttt{scripts/}            & Renode \texttt{.resc} execution scripts (baseline, ablations, full) \\
+    \texttt{firmware/timing\_probe/} & Zephyr timing-probe firmware (10 scenarios) \\
+    \texttt{firmware/binaries/}  & Pre-built ELF for bit-exact reproduction \\
+    \texttt{renode/}             & Renode session script and GPIO log parser \\
+    \texttt{captures/}           & Saleae (physical) and Renode (virtual) captures \\
+    \texttt{measurements/}       & Per-configuration UART logs \\
+    \texttt{analysis/}           & Python pipeline: statistics, figures, tables \\
+    \texttt{docs/thesis/}        & This document (\LaTeX{} sources) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Pinned Tool Versions}
+
+\begin{table}[hb]
+  \centering
+  \caption[Pinned tool versions]{Tool versions pinned for the entire
+    thesis (see \texttt{VERSIONS.txt}).}
+  \label{tab:versions}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Tool & Version \\
+    \midrule
+    Renode          & 1.15.3 \\
+    Zephyr RTOS     & 3.6.0 \\
+    Zephyr SDK      & 0.16.8 \\
+    west            & 1.2.0 \\
+    GCC (Arm)       & 12.2.1 (zephyr-sdk-0.16.8) \\
+    Python          & 3.11 \\
+    numpy / pandas / matplotlib & 1.24.3 / 2.0.3 / 3.7.2 \\
+    Host OS         & Windows 11 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Reproduction Steps}
+
+\begin{enumerate}
+  \item Build the firmware:\\
+        \texttt{west build -p always -b nucleo\_f103rb firmware/timing\_probe}
+  \item Flash to hardware and capture with Saleae Logic~2
+        (\cref{tab:pinmap}); export digital CSV to
+        \texttt{captures/physical/}.
+  \item Run baseline emulation: \texttt{renode scripts/baseline.resc};
+        TFL configurations: \texttt{tfl\_full.resc},
+        \texttt{tfl\_clock\_only.resc}, \texttt{tfl\_deadline\_only.resc},
+        \texttt{tfl\_bus\_only.resc}.
+  \item Run the analysis pipeline:\\
+        \texttt{python analysis/eval\_full.py} regenerates every figure
+        (\texttt{analysis/figures/}) and table
+        (\texttt{analysis/tables/}) in \cref{ch:evaluation}.
+\end{enumerate}

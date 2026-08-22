@@ -1,0 +1,70 @@
+% =====================================================================
+\chapter{Related Work}
+\label{ch:relatedwork}
+% =====================================================================
+
+\section{Firmware Rehosting and Emulation}
+\label{sec:rw:rehosting}
+
+The systematisation by Fasano et al.~\cite{fasano2021sok} and the
+survey by Wright et al.~\cite{wright2021challenges} map the design
+space of rehosting and identify \emph{fidelity} as its central
+challenge. Both works focus predominantly on \emph{execution} fidelity
+(does the firmware run at all, and does it take the same paths?) and
+\emph{memory/peripheral} fidelity; temporal fidelity is acknowledged
+but not quantified. This thesis fills that gap with hardware-grounded
+measurements.
+
+Firmadyne~\cite{chen2016firmadyne} pioneered large-scale emulation of
+Linux-based firmware; HALucinator~\cite{clements2020halucinator}
+replaces hardware-abstraction-layer functions with host-side handlers;
+P$^2$IM~\cite{feng2020p2im}, Pretender~\cite{gustafson2019pretender},
+and $\mu$Emu~\cite{zhou2021uemu} infer peripheral behaviour
+automatically to keep firmware running. All of these systems evaluate
+success as ``firmware executes correctly'', with no claim about
+\emph{when} events happen. Muench et al.~\cite{muench2018you}
+demonstrate that even memory-corruption effects differ between
+emulated and physical embedded targets---an early warning that
+emulation platforms are not behaviourally transparent. Our work extends
+this observation to the time domain.
+
+\section{Timing-Accurate Simulation}
+\label{sec:rw:timing}
+
+At the opposite end of the fidelity spectrum, cycle-accurate simulators
+model microarchitectural state per clock cycle. gem5~\cite{binkert2011gem5}
+provides cycle-approximate CPU models for architecture research, and
+commercial virtual platforms such as Simics~\cite{magnusson2002simics}
+offer configurable timing models. SystemC/TLM-2.0~\cite{systemc} defines
+loosely- and approximately-timed modelling styles in which
+transaction-level models annotate delays. These approaches achieve high
+temporal fidelity at the cost of simulation speed (typically
+$10^2$--$10^5\times$ slower than real time) and modelling effort; they
+are rarely practical for full-firmware CI workflows. The Temporal
+Fidelity Layer targets the middle ground: statistical (rather than
+cycle-exact) timing realism at near-native emulation speed.
+
+\section{Emulator Time Management}
+\label{sec:rw:quantum}
+
+QEMU's icount mode~\cite{bellard2005qemu} maps executed instructions to
+virtual time at a fixed rate, analogous to Renode's MIPS-based model,
+and shares its limitation: instruction counts, not microarchitectural
+cycles, drive the clock. Renode's quantum-based synchronisation of
+multiple machines~\cite{renode} enables deterministic multi-node
+simulation but aligns all cross-machine communication to quantum
+boundaries. The evaluation in \cref{sec:eval:quantum} quantifies the
+fidelity--performance trade-off of this quantum for the first time on
+a hardware-validated workload.
+
+\section{Positioning of this Thesis}
+\label{sec:rw:positioning}
+
+To the best of our knowledge, this thesis provides the first
+systematic, statistically evaluated comparison of RTOS-level timing
+primitives between a physical Cortex-M platform and its rehosted
+counterpart in Renode, together with a non-invasive mitigation layer.
+Unlike cycle-accurate simulation, TFL does not attempt to reproduce
+\emph{individual} event times; it aims to reproduce hardware-like
+timing \emph{distributions}---sufficient for testing timing-robustness
+of firmware---while preserving emulation speed and determinism controls.

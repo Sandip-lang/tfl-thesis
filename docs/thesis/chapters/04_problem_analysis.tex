@@ -1,0 +1,229 @@
+% =====================================================================
+\chapter{Problem Analysis and Measurement Methodology}
+\label{ch:problem}
+% =====================================================================
+
+This chapter answers RQ1. It first develops a taxonomy of the
+mechanisms by which rehosted timing deviates from physical timing
+(\cref{sec:problem:sources}), then presents the measurement
+methodology (\cref{sec:problem:methodology}) and the test scenarios
+(\cref{sec:problem:scenarios}) used to quantify each mechanism.
+
+\section{Sources of Temporal Deviation}
+\label{sec:problem:sources}
+
+We classify the deviation between emulated and physical timing into
+five sources, summarised in \cref{tab:sources}.
+
+\begin{table}[tb]
+  \centering
+  \caption[Taxonomy of temporal deviation sources]{Taxonomy of temporal
+    deviation sources between physical execution and rehosted execution
+    in Renode, and the TFL component addressing each source.}
+  \label{tab:sources}
+  \small
+  \begin{tabular}{@{}clll@{}}
+    \toprule
+    ID & Source & Mechanism in Renode & Addressed by \\
+    \midrule
+    \srcS{1} & Instruction timing        & Fixed MIPS rate, no $\mu$arch model    & --- (out of scope) \\
+    \srcS{2} & Interrupt delivery        & Aligned to translation-block/quantum    & --- (quantified) \\
+    \srcS{3} & Clock drift \& jitter     & Ideal oscillator, no noise             & \texttt{TFL\_ClockModel} \\
+    \srcS{4} & Scheduler quantisation    & Events snap to \SI{100}{\micro\second} quantum & \texttt{TFL\_DeadlineMonitor} \\
+    \srcS{5} & Inter-node propagation    & Zero-delay message delivery             & \texttt{TFL\_BusDelayModel} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{\srcS{1} --- Instruction-timing abstraction.}
+Renode converts executed instruction counts to virtual time at a
+configured rate (\texttt{PerformanceInMips 72}). Pipeline stalls, flash
+wait states, and bus contention on the real Cortex-M3 are not modelled,
+so code segments have proportionally distorted durations. Correcting
+\srcS{1} requires microarchitectural simulation and is explicitly out
+of scope; its magnitude is bounded experimentally via busy-wait tests.
+
+\paragraph{\srcS{2} --- Interrupt delivery latency.}
+On hardware, the NVIC preempts within 12 cycles plus bus-dependent
+overhead, producing a tight latency distribution (measured
+$\sigma \approx \SI{0.9}{\micro\second}$ at RTOS level). In Renode,
+interrupts are recognised at translation-block boundaries within a
+quantum, yielding a latency distribution governed by block length and
+quantum size rather than by the NVIC.
+
+\paragraph{\srcS{3} --- Clock drift and jitter.}
+A real crystal oscillator exhibits ppm-scale frequency offset and
+temperature drift; the emulated clock is mathematically exact. Any
+firmware that calibrates against wall-clock time, synchronises across
+nodes, or accumulates time over long horizons behaves unrealistically
+optimistically in the emulator.
+
+\paragraph{\srcS{4} --- Scheduler quantisation.}
+All virtual-time events are aligned to the emulation quantum (default
+\SI{100}{\micro\second}). Timer callbacks that jitter by
+$\sigma \approx \SI{1.3}{\micro\second}$ on hardware jitter by
+$\sigma \approx \SI{29}{\micro\second}$ in the emulator---a
+$23\times$ inflation (\cref{sec:eval:timer})---while tick-quantised
+sleeps lose the hardware's inherent $0$--$1$\,\ms{} rounding variance
+and appear \emph{too} deterministic.
+
+\paragraph{\srcS{5} --- Inter-node propagation delay.}
+Renode delivers messages between emulated machines in zero virtual
+time, whereas a physical UART byte at \SI{115200}{\baud} occupies
+$\approx \SI{86.8}{\micro\second}$ on the wire. Protocol
+implementations tested against zero-latency links can harbour latent
+race conditions.
+
+\section{Measurement Methodology}
+\label{sec:problem:methodology}
+
+\begin{figure}[tb]
+  \centering
+  \begin{tikzpicture}[
+      font=\small,
+      box/.style={draw, rounded corners=2pt, align=center,
+                  minimum height=9mm, inner sep=5pt},
+      lbl/.style={font=\footnotesize\itshape},
+      arr/.style={-{Stealth[length=2.5mm]}, thick}
+    ]
+    % ---- physical branch ----
+    \node[box, fill=blue!8, minimum width=34mm] (fw1)
+      {Timing-probe firmware\\ (Zephyr, GPIO markers)};
+    \node[box, fill=blue!8, below=7mm of fw1, minimum width=34mm] (hw)
+      {NUCLEO-F103RB\\ Cortex-M3 @ 72\,MHz};
+    \node[box, fill=blue!8, below=7mm of hw, minimum width=34mm] (la)
+      {Saleae Logic 8\\ 100\,MS/s capture};
+
+    % ---- virtual branch ----
+    \node[box, fill=red!8, right=28mm of fw1, minimum width=34mm] (fw2)
+      {Identical ELF binary\\ (bit-exact)};
+    \node[box, fill=red!8, below=7mm of fw2, minimum width=34mm] (ren)
+      {Renode 1.15.3\\ STM32F103 platform};
+    \node[box, fill=red!8, below=7mm of ren, minimum width=34mm] (gpiolog)
+      {GPIO trace hook\\ virtual-time CSV};
+
+    % ---- analysis ----
+    \node[box, fill=green!10, minimum width=44mm,
+          below right=10mm and -14mm of la] (ana)
+      {Analysis pipeline (Python)\\ edge extraction $\to$ statistics $\to$ figures};
+
+    \draw[arr] (fw1) -- (hw);
+    \draw[arr] (hw) -- node[lbl, right] {PA0/PA1/PA4/PA8} (la);
+    \draw[arr] (fw2) -- (ren);
+    \draw[arr] (ren) -- node[lbl, right] {gpioPortA hook} (gpiolog);
+    \draw[arr] (la.south) |- ($(ana.west)+(-3mm,2mm)$) -- ($(ana.west)+(0,2mm)$);
+    \draw[arr] (gpiolog.south) |- ($(ana.east)+(3mm,2mm)$) -- ($(ana.east)+(0,2mm)$);
+    \draw[thick, dashed, gray]
+      ($(fw1.north east)!0.5!(fw2.north west)+(0,3mm)$) --
+      ($(la.south east)!0.5!(gpiolog.south west)+(0,-3mm)$);
+    \node[lbl, above=1mm of fw1] {Physical world};
+    \node[lbl, above=1mm of fw2] {Virtual world};
+  \end{tikzpicture}
+  \caption[Measurement setup]{Measurement setup. The identical firmware
+    ELF runs on the physical board and in Renode; GPIO events are
+    captured by a logic analyser (physical) and a trace hook (virtual)
+    and compared by a common analysis pipeline.}
+  \label{fig:setup}
+\end{figure}
+
+\Cref{fig:setup} shows the twin measurement paths. Three principles
+guarantee comparability:
+
+\begin{enumerate}
+  \item \textbf{Bit-identical firmware.} The same
+        \texttt{zephyr.elf}, built once with Zephyr SDK~0.16.8, is
+        flashed to the board and loaded into Renode. There are no
+        emulator-specific code paths.
+  \item \textbf{A common observable.} Every timing event is a GPIO edge
+        on one of four marker pins (\cref{tab:pinmap} in
+        \cref{app:hardware}). Physical edges are timestamped at
+        \SI{10}{\nano\second} resolution by the logic analyser; virtual
+        edges are timestamped in virtual time by a hook on the emulated
+        GPIO port.
+  \item \textbf{A common analysis pipeline.} Both trace formats are
+        reduced to identical interval series and processed by the same
+        statistics code, eliminating tool-induced bias.
+\end{enumerate}
+
+\paragraph{Metrics.} For each scenario we report the interval mean
+$\mu$, standard deviation $\sigma$, the systematic error
+$\mu - T_{\mathrm{nom}}$ against the nominal period, and the
+\emph{jitter ratio}
+\begin{equation}
+  J \;=\; \frac{\sigma_{\mathrm{emu}}}{\sigma_{\mathrm{hw}}},
+  \label{eq:jitterratio}
+\end{equation}
+which equals $1$ for perfect variance fidelity, $J<1$ for an emulator
+that is unrealistically deterministic, and $J>1$ for one that is
+unrealistically noisy. Because timing distributions are generally
+non-Gaussian (verified by Shapiro--Wilk tests~\cite{shapiro1965}),
+distribution equality is tested with the non-parametric
+Mann--Whitney~$U$ test~\cite{mann1947} at $\alpha=0.01$, with the
+rank-biserial correlation $r$ as effect size.
+
+\section{Test Scenarios}
+\label{sec:problem:scenarios}
+
+The timing-probe firmware sequences ten scenarios
+(\cref{tab:scenarios}), grouped into four categories that isolate
+different deviation sources. Each scenario is announced over UART and
+delimited by an envelope marker (PA1), sub-tests are separated by
+counting pulses on PA4, and the measured event itself toggles PA0.
+
+\begin{table}[tb]
+  \centering
+  \caption[Timing test scenarios]{Timing test scenarios implemented in
+    the probe firmware. Scenarios marked $\dagger$ are used for the
+    statistical evaluation in \cref{ch:evaluation}; the remaining
+    scenarios serve calibration and plausibility checks.}
+  \label{tab:scenarios}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    ID & Scenario & Primitive & Isolates \\
+    \midrule
+    T1$^\dagger$ & Periodic toggle \SI{1}{\milli\second}   & \ksleep{}            & \srcS{4} tick quantisation \\
+    T2$^\dagger$ & Periodic toggle \SI{10}{\milli\second}  & \ksleep{}            & \srcS{4} tick quantisation \\
+    T3$^\dagger$ & Periodic toggle \SI{100}{\milli\second} & \ksleep{}            & \srcS{4} tick quantisation \\
+    T4 & Busy-wait accuracy sweep                          & \texttt{k\_busy\_wait()} & \srcS{1} instruction timing \\
+    T5 & Sleep accuracy sweep                              & \ksleep{}            & \srcS{4} \\
+    T6$^\dagger$ & Timer callback jitter \SI{10}{\milli\second} & \ktimer{}       & \srcS{2}/\srcS{4} \\
+    T7$^\dagger$ & Thread scheduling jitter                & semaphore wakeup     & \srcS{4} \\
+    T8$^\dagger$ & Multi-thread interference               & 3 competing threads  & \srcS{4} \\
+    T9$^\dagger$ & ISR latency                             & EXTI interrupt       & \srcS{2} \\
+    T10 & Workload impact sweep                            & \ktimer{} + load     & \srcS{2}/\srcS{4} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Sample sizes.} Fast scenarios (T1, T9) collect 2\,500
+intervals per environment; slower scenarios collect 250 (T2, T6--T8)
+or 25 (T3) intervals, bounded by capture memory and simulation
+wall-clock budget. All reported significance tests are computed on the
+full per-scenario sample.
+
+\section{Baseline Characterisation}
+\label{sec:problem:baseline}
+
+Applying the methodology to stock Renode~1.15.3 yields the baseline
+picture developed in detail in \cref{ch:evaluation}; two findings
+motivate the design of TFL and are previewed here.
+
+First, deviations are \emph{bidirectional}. For tick-quantised sleeps
+(T1--T3), hardware exhibits $\sigma \approx \SI{400}{\micro\second}$
+(dominated by Zephyr's $0$--$1$\,\ms{} tick rounding interacting with
+asynchronous test phases), while Renode reproduces only
+$\sigma \approx \SI{70}{}$--$\SI{84}{\micro\second}$: jitter ratios of
+$0.17$--$0.21$. For hardware-timer callbacks (T6) the situation
+inverts: $\sigma_{\mathrm{hw}} = \SI{1.3}{\micro\second}$ versus
+$\sigma_{\mathrm{emu}} = \SI{29.4}{\micro\second}$, a jitter ratio of
+$23.4$. A single global ``speed-up/slow-down'' correction therefore
+cannot fix temporal fidelity; source-specific modelling is required.
+
+Second, mean-level accuracy and variance-level fidelity are
+independent failures. In T1--T3 the emulated \emph{means} are within
+\SI{0.1}{\percent} of nominal while hardware means carry the
+$+1$\,\ms{} tick-rounding offset---so the emulator is ``more accurate''
+than reality in the mean, yet completely misses the distribution shape
+($p < 10^{-8}$, $|r| > 0.99$ for T1--T3). Fidelity, not idealised
+accuracy, is the correct target for rehosted testing.

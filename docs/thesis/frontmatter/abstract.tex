@@ -1,0 +1,44 @@
+% ---------------------------------------------------------------------
+%  Abstract
+% ---------------------------------------------------------------------
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Rehosting---executing unmodified embedded firmware inside a full-system
+emulator---has become a standard technique for testing, debugging, and
+security analysis of embedded software. Frameworks such as Renode
+faithfully reproduce the \emph{functional} behaviour of microcontroller
+platforms, but their \emph{temporal} behaviour can deviate substantially
+from real hardware: emulated clocks advance in coarse scheduling quanta,
+interrupt latency is idealised, and physical effects such as oscillator
+drift and bus propagation delay are absent entirely. For timing-sensitive
+firmware, these deviations can hide real bugs and create false confidence
+in test results.
+
+This thesis quantifies and mitigates the temporal deviation between a
+physical microcontroller and its rehosted counterpart. Using an
+STM32F103RB (Arm Cortex-M3, \SI{72}{\mega\hertz}) running Zephyr RTOS and
+an instrumented GPIO-marker firmware, we measure ten timing scenarios on
+real hardware with a \SI{100}{\mega\sample\per\second} logic analyser and compare them
+against the identical firmware running in Renode~1.15.3. The comparison
+reveals systematic deviations of up to three orders of magnitude in
+timing \emph{variance}: the emulator is simultaneously too deterministic
+for tick-quantised sleeps (jitter ratio ${\approx}\,0.2$) and too noisy
+for hardware-timer callbacks (jitter ratio up to $23{\times}$).
+
+Guided by a taxonomy of five deviation sources, we design and implement
+the \emph{Temporal Fidelity Layer} (TFL): three composable C\# peripheral
+models for Renode---a clock model injecting configurable drift and
+Gaussian jitter, a deadline monitor recording task wakeup deviation, and
+a bus delay model reproducing inter-node propagation latency. TFL
+requires no changes to Renode itself and no changes to the firmware
+logic; it is enabled purely through platform description files.
+
+Across seven statistically evaluated scenarios, TFL reduces the
+geometric-mean jitter-ratio error from $7.6{\times}$ to $2.9{\times}$
+and brings four of seven scenarios within a factor of $1.7$ of hardware
+variance. We further characterise the fidelity--performance trade-off of
+Renode's scheduling quantum, showing that quantum reduction alone cannot
+reach hardware-level fidelity at acceptable simulation cost. All
+measurements, models, and analysis scripts are released as open
+research artefacts.

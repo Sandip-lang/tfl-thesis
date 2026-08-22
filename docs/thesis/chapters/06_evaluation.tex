@@ -1,0 +1,394 @@
+% =====================================================================
+\chapter{Evaluation}
+\label{ch:evaluation}
+% =====================================================================
+
+This chapter evaluates temporal fidelity in three steps: validation of
+the measurement chain itself
+(\cref{sec:eval:instrumentation,sec:eval:validation}), the baseline
+comparison of stock Renode against hardware
+(\cref{sec:eval:sleep,sec:eval:timer,sec:eval:quantum,sec:eval:workload}),
+and the effect of the Temporal Fidelity Layer
+(\cref{sec:eval:tfl}). \Cref{sec:eval:discussion} discusses findings
+and threats to validity.
+
+\section{Experimental Setup}
+\label{sec:eval:setup}
+
+All experiments use the configuration of \cref{sec:problem:methodology}:
+a NUCLEO-F103RB running the timing-probe firmware (Zephyr~3.6.0,
+\SI{1000}{\hertz} tick), captured with a Saleae Logic~8 at
+\SI{100}{\mega\sample\per\second}; and Renode~1.15.3 executing the identical ELF with
+\texttt{PerformanceInMips~72} and the default
+\SI{100}{\micro\second} quantum unless stated otherwise. TFL runs use
+the configuration of \cref{lst:repl}. Tool versions are pinned in
+\cref{app:reproducibility}. Statistical procedures follow
+\cref{sec:problem:methodology}: Mann--Whitney~$U$ at $\alpha = 0.01$,
+rank-biserial $r$ as effect size, Shapiro--Wilk for normality.
+
+\section{Instrumentation Overhead}
+\label{sec:eval:instrumentation}
+
+The GPIO marker itself costs time; if that cost were large or noisy it
+would contaminate every measurement. \Cref{tab:instrumentation}
+quantifies it: a set/clear marker pulse occupies a mean of
+\SI{261}{\nano\second} (18 CPU cycles: 14 in the Zephyr GPIO driver, 4
+in the bus access), with $\sigma = \SI{10}{\nano\second}$. All measured
+effects in this chapter are two to four orders of magnitude larger, so
+instrumentation overhead is negligible for the conclusions drawn.
+
+\begin{table}[tb]
+  \centering
+  \caption[GPIO instrumentation overhead]{GPIO instrumentation overhead
+    on the physical target (10\,000 marker pulses).}
+  \label{tab:instrumentation}
+  \small
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Metric & Value & Notes \\
+    \midrule
+    Min.\ HIGH pulse width & \SI{257}{\nano\second} & GPIO driver + bus call \\
+    Mean HIGH pulse width  & \SI{261}{\nano\second} & systematic offset \\
+    Standard deviation     & \SI{10}{\nano\second}  & measurement noise floor \\
+    Equivalent CPU cycles  & 18                     & 14 driver + 4 bus \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Measurement-Chain Validation}
+\label{sec:eval:validation}
+
+To bound the logic analyser's own error, a hardware timer PWM output
+with a nominal \SI{1.000000}{\milli\second} period was captured
+(\cref{tab:validation}). The measured mean deviates by only
+\SI{20}{\nano\second} (timebase offset $2\times10^{-5}$) with
+$\sigma = \SI{12}{\nano\second}$---confirming that the capture chain
+resolves all effects studied here with ample margin.
+
+\begin{table}[tb]
+  \centering
+  \caption[Logic-analyser validation]{Validation of the capture chain
+    against a crystal-derived \SI{1}{\milli\second} PWM reference.}
+  \label{tab:validation}
+  \small
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Metric & Value \\
+    \midrule
+    Configured period  & \SI{1.000000}{\milli\second} \\
+    Measured mean      & \SI{1.000020}{\milli\second} \\
+    Timebase offset    & \SI{20}{\nano\second} \\
+    Standard deviation & \SI{12}{\nano\second} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{RTOS Sleep Timing (T1--T3)}
+\label{sec:eval:sleep}
+
+\begin{table}[tb]
+  \centering
+  \caption[Sleep-based periodic toggling, hardware vs.\ baseline
+    Renode]{Sleep-based periodic toggling (T1--T3): physical hardware
+    versus baseline Renode. Means in \si{\milli\second}, standard
+    deviations in \si{\micro\second}.}
+  \label{tab:sleep}
+  \small
+  \begin{tabular}{@{}lS[table-format=3.3]S[table-format=3.3]S[table-format=3.1]S[table-format=3.3]S[table-format=2.1]S[table-format=2.2]@{}}
+    \toprule
+    Test & {Nominal} & {HW mean} & {HW $\sigma$} & {Renode mean} & {Renode $\sigma$} & {$J$} \\
+    \midrule
+    T1 & 2.000   & 2.991   & 410.6 & 1.999   & 81.3 & 0.20 \\
+    T2 & 20.000  & 20.981  & 400.2 & 19.992  & 83.8 & 0.21 \\
+    T3 & 200.000 & 201.014 & 398.7 & 200.011 & 69.4 & 0.17 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\Cref{tab:sleep} compares the toggle-period distributions produced by
+\ksleep{}-based loops. Two effects stand out.
+
+\paragraph{Systematic mean offset (hardware only).} Physical means
+exceed nominal by ${\approx}\,\SI{1}{\milli\second}$ regardless of
+period: Zephyr rounds sleep durations up to the next
+\SI{1}{\milli\second} tick, and the phase of the request relative to
+the tick adds a uniformly distributed extra delay. Renode reproduces
+the tick mechanism but---because thread wakeup and tick processing are
+quantum-aligned and phase-locked---the \emph{distribution} of that
+extra delay collapses.
+
+\paragraph{Suppressed variance (emulator).} Hardware exhibits
+$\sigma \approx \SI{400}{\micro\second}$ across all three periods,
+while Renode shows only \SIrange{69}{84}{\micro\second}: jitter ratios
+of $0.17$--$0.21$. The differences are highly significant
+(Mann--Whitney $p < 10^{-8}$, $|r| > 0.99$ for all three tests).
+\Cref{fig:perioddist} visualises T2: the hardware distribution is broad
+and right-shifted by the tick offset, whereas baseline Renode
+concentrates tightly around the nominal value.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{fig61_period_dist.pdf}
+  \caption[Period distribution for \ksleep{}-based toggling
+    (T2)]{Period distribution for \ksleep{}(\SI{10}{\milli\second})
+    toggling (T2). Hardware (blue) is right-shifted by tick rounding
+    and broad; baseline Renode (red) clusters unrealistically tightly
+    at the nominal period (dashed).}
+  \label{fig:perioddist}
+\end{figure}
+
+\section{Timer, Scheduling, and ISR Timing (T6--T9)}
+\label{sec:eval:timer}
+
+\begin{table}[tb]
+  \centering
+  \caption[Consolidated baseline comparison, all statistical
+    scenarios]{Consolidated baseline comparison (hardware vs.\ stock
+    Renode). $J$ per \cref{eq:jitterratio}; $p$ from Mann--Whitney~$U$.
+    $J$ deviates from $1$ in both directions.}
+  \label{tab:consolidated}
+  \small
+  \begin{tabular}{@{}lS[table-format=3.3]S[table-format=3.3]S[table-format=3.1]S[table-format=3.3]S[table-format=2.1]S[table-format=2.2]S[table-format=1.4]@{}}
+    \toprule
+    Test & {Nominal (\si{\milli\second})} & {HW mean} & {HW $\sigma$ (\si{\micro\second})} & {Ren.\ mean} & {Ren.\ $\sigma$ (\si{\micro\second})} & {$J$} & {$p$} \\
+    \midrule
+    T1 & 2.000   & 2.991   & 410.6 & 1.999   & 81.3 & 0.20  & 0.0000 \\
+    T2 & 20.000  & 20.981  & 400.2 & 19.992  & 83.8 & 0.21  & 0.0000 \\
+    T3 & 200.000 & 201.014 & 398.7 & 200.011 & 69.4 & 0.17  & 0.0000 \\
+    T6 & 20.000  & 20.000  & 1.3   & 20.001  & 29.4 & 23.36 & 0.8510 \\
+    T7 & 10.000  & 10.001  & 8.7   & 10.004  & 57.5 & 6.58  & 0.1941 \\
+    T8 & 10.000  & 10.000  & 22.2  & 10.006  & 90.1 & 4.07  & 0.1632 \\
+    T9 & 2.000   & 2.000   & 0.9   & 2.001   & 14.6 & 16.28 & 0.0077 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+For primitives driven by the hardware timer rather than the scheduler
+tick, the fidelity failure inverts (\cref{tab:consolidated}, rows
+T6--T9). A \ktimer{} callback that hardware delivers with
+$\sigma = \SI{1.3}{\micro\second}$ jitters with
+$\sigma = \SI{29.4}{\micro\second}$ in the emulator ($J = 23.4$),
+because callback delivery snaps to quantum boundaries
+(\srcS{4}) and translation-block granularity (\srcS{2}). ISR latency
+(T9) shows the same pattern ($J = 16.3$). Notably, the emulated
+\emph{means} remain accurate to within a few microseconds---the
+deviation is almost purely in the variance, which is exactly the
+component that mean-based validation would never detect.
+\Cref{fig:cdf} shows the resulting cumulative distributions for T9: the
+hardware CDF is a near-step function, the emulated CDF a wide ramp
+spanning the quantum.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{fig62_cdf.pdf}
+  \caption[Cumulative distribution of ISR-driven period
+    (T9)]{Cumulative distribution of the ISR-driven \SI{1}{\milli\second}
+    toggle period (T9, two-toggle interval \SI{2}{\milli\second}).
+    Hardware rises almost vertically ($\sigma=\SI{0.9}{\micro\second}$);
+    baseline Renode spreads over tens of microseconds.}
+  \label{fig:cdf}
+\end{figure}
+
+\section{Quantum Sensitivity}
+\label{sec:eval:quantum}
+
+Since \srcS{4} deviations scale with the quantum, one may ask whether
+simply shrinking the quantum restores fidelity.
+\Cref{tab:quantum} and \cref{fig:quantum} quantify the trade-off for
+T6: reducing the quantum from \SI{100}{\micro\second} to
+\SI{1}{\micro\second} improves the jitter ratio from $22$ to $0.23$
+(overshooting into over-determinism), but inflates simulation
+wall-clock time by two orders of magnitude. The default quantum is a
+deliberate performance choice; hardware-level fidelity through quantum
+reduction alone costs roughly $100\times$ simulation slowdown and still
+cannot reproduce hardware's \emph{distribution shape}---only shrink
+the emulator's artificial noise. This motivates TFL's approach of
+\emph{modelling} the missing effects instead.
+
+\begin{table}[tb]
+  \centering
+  \caption[Quantum sensitivity (T6)]{Renode scheduling-quantum
+    sensitivity for timer-callback jitter (T6) and simulation cost of a
+    \SI{90}{\second} firmware run.}
+  \label{tab:quantum}
+  \small
+  \begin{tabular}{@{}S[table-format=5.0]S[table-format=4.2]S[table-format=4.2]S[table-format=2.3]@{}}
+    \toprule
+    {Quantum (\si{\micro\second})} & {T6 $\sigma$ (\si{\micro\second})} & {Jitter ratio $J$} & {Wall-clock (\si{\second})} \\
+    \midrule
+    10000 & 2932.80 & 2269.69 & 0.005 \\
+    1000  & 301.52  & 233.35  & 0.045 \\
+    100   & 28.60   & 22.13   & 0.450 \\
+    10    & 2.87    & 2.22    & 4.500 \\
+    1     & 0.29    & 0.23    & 45.000 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{fig64_quantum_tradeoff.pdf}
+  \caption[Quantum fidelity--performance trade-off]{The
+    fidelity--performance trade-off of the Renode scheduling quantum
+    (log--log). Each decade of quantum reduction buys one decade of
+    jitter reduction at one decade of simulation slowdown.}
+  \label{fig:quantum}
+\end{figure}
+
+\section{Workload Interference (T10)}
+\label{sec:eval:workload}
+
+\Cref{tab:workload} and \cref{fig:workload} examine how competing
+computational load degrades a \SI{10}{\milli\second} timer callback.
+On hardware, jitter grows from \SI{1.2}{\micro\second} (idle) to
+\SI{24.5}{\micro\second} (extreme load)---a $20\times$ degradation
+driven by interrupt masking and bus contention. Baseline Renode starts
+an order of magnitude too noisy (\SI{28.9}{\micro\second} idle) and
+grows only $1.5\times$, badly compressing the dynamic range of the
+load effect. TFL (third column) tracks the hardware trend far more
+closely, staying within a factor of $\le 7$ at idle and $1.1$ at
+extreme load.
+
+\begin{table}[tb]
+  \centering
+  \caption[Workload impact on timer jitter]{Workload impact on
+    \SI{10}{\milli\second} timer-callback jitter ($\sigma$, in
+    \si{\micro\second}).}
+  \label{tab:workload}
+  \small
+  \begin{tabular}{@{}clS[table-format=2.1]S[table-format=2.1]S[table-format=2.1]@{}}
+    \toprule
+    Phase & Load & {Hardware} & {Baseline Renode} & {TFL} \\
+    \midrule
+    1 & None    & 1.2  & 28.9 & 8.5 \\
+    2 & Light   & 3.1  & 32.1 & 10.2 \\
+    3 & Heavy   & 8.7  & 38.5 & 14.8 \\
+    4 & Extreme & 24.5 & 44.2 & 26.1 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{fig65_workload_impact.pdf}
+  \caption[Workload impact on timer jitter]{Timer-callback jitter under
+    increasing computational load (T10). Baseline Renode compresses the
+    hardware's $20\times$ dynamic range into $1.5\times$; TFL restores
+    the trend.}
+  \label{fig:workload}
+\end{figure}
+
+\section{Effect of the Temporal Fidelity Layer}
+\label{sec:eval:tfl}
+
+\begin{table}[tb]
+  \centering
+  \caption[Jitter fidelity, baseline vs.\ TFL]{Jitter fidelity before
+    and after TFL. $J$ = baseline Renode jitter ratio,
+    $J_{\mathrm{TFL}}$ = TFL-enhanced jitter ratio (target $1.0$).
+    Improvements in \textbf{bold}.}
+  \label{tab:tfl}
+  \small
+  \begin{tabular}{@{}llS[table-format=2.1]S[table-format=2.1]S[table-format=4.1]S[table-format=2.2]S[table-format=2.2]@{}}
+    \toprule
+    Test & Scenario & {HW $\sigma$ (\si{\micro\second})} & {Ren.\ $\sigma$ (\si{\micro\second})} & {TFL $\sigma$ (\si{\micro\second})} & {$J$} & {$J_{\mathrm{TFL}}$} \\
+    \midrule
+    T1 & \ksleep{} \SI{1}{\milli\second}    & 410.6 & 81.3 & 39.7   & 0.20  & 0.10 \\
+    T2 & \ksleep{} \SI{10}{\milli\second}   & 400.2 & 83.8 & 418.4  & 0.21  & {\bfseries 1.05} \\
+    T3 & \ksleep{} \SI{100}{\milli\second}  & 398.7 & 69.4 & 3991.0 & 0.17  & 10.01 \\
+    T6 & \ktimer{} \SI{10}{\milli\second}   & 1.3   & 29.4 & 8.5    & 23.36 & {\bfseries 6.77} \\
+    T7 & Thread scheduling                  & 8.7   & 57.5 & 11.6   & 6.58  & {\bfseries 1.32} \\
+    T8 & Multi-thread interference          & 22.2  & 90.1 & 24.6   & 4.07  & {\bfseries 1.11} \\
+    T9 & ISR latency                        & 0.9   & 14.6 & 1.5    & 16.28 & {\bfseries 1.63} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\Cref{tab:tfl} presents the central result. With TFL enabled
+(full configuration, \cref{lst:repl}), five of seven scenarios move
+substantially toward $J = 1$:
+
+\begin{itemize}
+  \item \textbf{Timer/scheduler/ISR scenarios (T6--T9)}: the emulator's
+        artificial quantum noise is replaced by calibrated Gaussian
+        jitter, bringing $J$ from $4.1$--$23.4$ down to $1.1$--$6.8$;
+        T7--T9 land within a factor of $1.7$ of hardware variance.
+  \item \textbf{Sleep at \SI{10}{\milli\second} (T2)}: $J$ improves
+        from $0.21$ to $1.05$---an almost exact variance match.
+\end{itemize}
+
+Aggregating over all seven scenarios with the symmetric fidelity error
+$\lvert \log_2 J \rvert$, TFL reduces the geometric-mean fold error
+from $7.6\times$ to $2.9\times$ and the median fold error from
+$5.7\times$ ($2^{2.52}$) to $1.6\times$ ($2^{0.70}$).
+\Cref{fig:jitterratio} visualises the per-test ratios on a log axis;
+\cref{fig:tflcomparison} overlays the three distributions for
+representative scenarios.
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{fig63_jitter_ratio.pdf}
+  \caption[Jitter ratio, baseline vs.\ TFL]{Jitter ratio $J$ per
+    scenario (log scale; $1.0$ = perfect variance fidelity). TFL moves
+    every timer-driven scenario and T2 markedly toward $1$.}
+  \label{fig:jitterratio}
+\end{figure}
+
+\begin{figure}[tb]
+  \centering
+  \includegraphics[width=\textwidth]{fig66_tfl_comparison.pdf}
+  \caption[Distribution comparison hardware / baseline /
+    TFL]{Interval distributions for hardware, baseline Renode, and
+    TFL-enhanced Renode. TFL reshapes the emulated distributions
+    toward the hardware envelope.}
+  \label{fig:tflcomparison}
+\end{figure}
+
+\paragraph{Where TFL falls short.} Two scenarios regress. In T1 the
+injected jitter is small relative to the (already suppressed) tick
+distribution, leaving $J = 0.10$. In T3 the period-proportional jitter
+model overshoots: hardware tick-rounding jitter is \emph{absolute}
+(${\approx}\SI{400}{\micro\second}$ regardless of period), while the
+TFL sleep-path perturbation scales with the period, producing
+$\sigma = \SI{4.0}{\milli\second}$ at a \SI{200}{\milli\second} period
+($J = 10$). The correct model for \srcS{4} sleep deviation is an
+absolute, uniform $0$--$1$ tick term, not a proportional Gaussian---a
+straightforward calibration fix identified by, and only visible
+through, this hardware-grounded evaluation
+(cf.\ \cref{sec:future:calibration}).
+
+\section{Discussion and Threats to Validity}
+\label{sec:eval:discussion}
+
+\paragraph{Answer to RQ1.} Stock Renode's temporal deviation from
+hardware is large, structured, and bidirectional: variance suppression
+of $5\times$ for tick-quantised sleeps and variance inflation up to
+$23\times$ for timer-driven events, with accurate means throughout.
+Mean-based validation is therefore insufficient; distribution-level
+metrics such as the jitter ratio are necessary.
+
+\paragraph{Answer to RQ2.} A runtime-loaded peripheral layer can
+recover a large share of temporal fidelity (geometric-mean fold error
+$7.6\times \to 2.9\times$) without touching the emulator core or the
+firmware logic. Residual error is dominated by the scheduling quantum
+(\srcS{2}/\srcS{4}) and by calibration of the injected models.
+
+\paragraph{Threats to validity.}
+\begin{description}
+  \item[Internal.] GPIO instrumentation adds \SI{261}{\nano\second}
+        per marker (\cref{tab:instrumentation}), and the capture chain
+        contributes \SI{12}{\nano\second} noise
+        (\cref{tab:validation})---both negligible against measured
+        effects. The TFL PRNG is seeded; all statistics are computed
+        over full capture sets.
+  \item[Construct.] The jitter ratio captures second-moment fidelity
+        only. Mann--Whitney tests and the CDF/histogram comparisons
+        (\cref{fig:perioddist,fig:cdf,fig:tflcomparison}) guard against
+        distributions that match $\sigma$ but differ in shape.
+  \item[External.] Results are demonstrated for one MCU family
+        (STM32F1/Cortex-M3), one RTOS (Zephyr), and one emulator
+        (Renode~1.15.3). The deviation taxonomy and the TFL mechanism
+        are platform-generic, but the quantitative constants are not;
+        transferring them requires re-calibration
+        (\cref{sec:future:generalisation}).
+\end{description}

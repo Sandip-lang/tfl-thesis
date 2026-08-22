@@ -1,0 +1,230 @@
+% =====================================================================
+\chapter{The Temporal Fidelity Layer}
+\label{ch:design}
+% =====================================================================
+
+This chapter answers RQ2 by design. \Cref{sec:design:goals} derives
+design goals from the baseline characterisation;
+\cref{sec:design:architecture} presents the architecture;
+\cref{sec:design:components} details the three components; and
+\cref{sec:design:integration} shows how TFL integrates into an
+unmodified Renode installation.
+
+\section{Design Goals}
+\label{sec:design:goals}
+
+\begin{description}
+  \item[G1 --- Non-invasiveness.] No modification of the Renode code
+        base and no recompilation: TFL must load into stock
+        Renode~1.15.3 at runtime.
+  \item[G2 --- Firmware transparency.] The firmware logic under test
+        must not change. (The probe firmware writes to optional TFL
+        registers for \emph{monitoring}, but these writes are
+        no-ops on hardware-only builds and do not alter control flow.)
+  \item[G3 --- Statistical realism.] TFL targets distribution-level
+        fidelity: emulated timing variance should match hardware
+        variance ($J \to 1$ in \cref{eq:jitterratio}), not individual
+        event times.
+  \item[G4 --- Configurability and reproducibility.] All temporal
+        parameters (drift, jitter, delay) are set declaratively in the
+        platform description; randomness draws from Renode's seeded
+        PRNG so that runs remain reproducible.
+  \item[G5 --- Composability.] Each deviation source is modelled by an
+        independent component; any subset can be enabled for ablation
+        studies.
+\end{description}
+
+\section{Architecture}
+\label{sec:design:architecture}
+
+\begin{figure}[tb]
+  \centering
+  \begin{tikzpicture}[
+      font=\small,
+      box/.style={draw, rounded corners=2pt, align=center,
+                  minimum height=9mm, inner sep=4pt},
+      tfl/.style={box, fill=green!12},
+      std/.style={box, fill=black!6},
+      arr/.style={-{Stealth[length=2.5mm]}, thick},
+      lbl/.style={font=\footnotesize\itshape}
+    ]
+    % firmware
+    \node[std, minimum width=118mm] (fw)
+      {Unmodified firmware ELF (Zephyr application)};
+
+    % system bus
+    \node[std, minimum width=118mm, below=9mm of fw] (bus)
+      {Renode system bus (\texttt{sysbus})};
+
+    \draw[arr, <->] (fw) -- node[lbl, right] {load/store, IRQ} (bus);
+
+    % standard peripherals
+    \node[std, below=9mm of bus.south west, anchor=north west,
+          minimum width=26mm] (cpu) {CPU\\ Cortex-M3};
+    \node[std, right=4mm of cpu, minimum width=26mm] (per)
+      {Stock peripherals\\ USART, GPIO, \dots};
+
+    % TFL peripherals
+    \node[tfl, right=8mm of per, minimum width=17mm] (clk)
+      {\texttt{TFL\_Clock}\\ \texttt{Model}\\[1pt] {\footnotesize\srcS{3}}};
+    \node[tfl, right=4mm of clk, minimum width=17mm] (mon)
+      {\texttt{TFL\_Deadline}\\ \texttt{Monitor}\\[1pt] {\footnotesize\srcS{4}}};
+    \node[tfl, right=4mm of mon, minimum width=17mm] (busd)
+      {\texttt{TFL\_BusDelay}\\ \texttt{Model}\\[1pt] {\footnotesize\srcS{5}}};
+
+    \draw[arr, <->] (cpu.north) -- ($(cpu.north|-bus.south)$);
+    \draw[arr, <->] (per.north) -- ($(per.north|-bus.south)$);
+    \draw[arr, <->] (clk.north) -- ($(clk.north|-bus.south)$);
+    \draw[arr, <->] (mon.north) -- ($(mon.north|-bus.south)$);
+    \draw[arr, <->] (busd.north) -- ($(busd.north|-bus.south)$);
+
+    % TFL brace
+    \node[draw, dashed, rounded corners=2pt, fit=(clk)(mon)(busd),
+          inner sep=3mm, label={[lbl]below:Temporal Fidelity Layer
+          (runtime-loaded C\# peripherals)}] {};
+
+    % csv output
+    \node[std, below=13mm of mon, minimum width=30mm] (csv)
+      {deviation CSV\\ (per-wakeup samples)};
+    \draw[arr] (mon.south) -- (csv.north);
+  \end{tikzpicture}
+  \caption[TFL architecture]{TFL architecture. The three TFL components
+    are ordinary memory-mapped peripherals attached to the system bus by
+    the platform description; Renode itself is unmodified.}
+  \label{fig:tfl-arch}
+\end{figure}
+
+\Cref{fig:tfl-arch} shows the architecture. Each TFL component is a C\#
+class deriving from Renode's \texttt{BasicDoubleWordPeripheral},
+registered on the system bus by the \texttt{.repl} platform file. Two
+integration idioms are used:
+
+\begin{itemize}
+  \item \textbf{Shadowing}: \texttt{TFL\_ClockModel} is mapped over the
+        SysTick register window (\texttt{0xE000E010}--\texttt{0xE000E02F}),
+        transparently perturbing every counter read the firmware
+        performs. No firmware cooperation is needed.
+  \item \textbf{Side-band}: \texttt{TFL\_DeadlineMonitor} and
+        \texttt{TFL\_BusDelayModel} occupy otherwise-unused address
+        ranges (\texttt{0x50000000}, \texttt{0x50001000}). Firmware may
+        write to them for monitoring (a single \texttt{TFL\_MARK()}
+        store, compiled to one \texttt{str} instruction), which is
+        harmless on hardware where the region is unmapped\footnote{On
+        Cortex-M3 the region is write-ignored in the probe
+        configuration; guarding the macro with a build flag is equally
+        possible.}.
+\end{itemize}
+
+\section{Components}
+\label{sec:design:components}
+
+\subsection{TFL\_ClockModel: Drift and Jitter Injection (\srcS{3})}
+\label{sec:design:clock}
+
+The clock model exposes a SysTick-compatible register block
+(\texttt{CTRL}, \texttt{LOAD}, \texttt{CURRENT}, \texttt{CALIB}). On
+every read of \texttt{CURRENT} it computes the ideal cycle count
+$c_{\mathrm{true}}$ from virtual time and the configured CPU frequency
+$f$, then returns a perturbed value
+%
+\begin{equation}
+  c \;=\; c_{\mathrm{true}}
+        \;+\; \underbrace{c_{\mathrm{true}}\cdot
+              \frac{D}{10^6}}_{\text{drift, } D~\mathrm{ppm}}
+        \;+\; \underbrace{z \cdot \sigma_J \cdot
+              \frac{f}{10^9}}_{\text{jitter, } z\sim\mathcal{N}(0,1)},
+  \label{eq:clockmodel}
+\end{equation}
+%
+where $D$ (\texttt{DriftPpm}) models static oscillator offset and
+$\sigma_J$ (\texttt{JitterNs}) models cycle-to-cycle noise, generated
+by a Box--Muller transform from Renode's seeded PRNG (goal G4). The
+evaluation configuration uses $D = 25$\,ppm and
+$\sigma_J = \SI{150}{\nano\second}$, values within the tolerance band
+of the STM32F103's HSE crystal circuit~\cite{stm32rm0008}.
+
+\subsection{TFL\_DeadlineMonitor: Wakeup Deviation Tracking (\srcS{4})}
+\label{sec:design:monitor}
+
+The deadline monitor quantifies scheduler-induced deviation
+\emph{inside} the emulation. Firmware writes to its \texttt{MARK}
+register at every periodic wakeup; the peripheral timestamps the write
+in virtual time, computes the deviation from the configured
+\texttt{ExpectedPeriodNs}, updates the \texttt{LAST\_DEV\_HI/LO}
+registers (readable by the firmware itself, enabling self-adaptive
+tests), and streams per-sample records to a CSV file for offline
+analysis. This turns the emulator into its own measurement instrument
+and provides the virtual-side ground truth used in
+\cref{sec:eval:tfl}.
+
+\subsection{TFL\_BusDelayModel: Propagation Delay Injection (\srcS{5})}
+\label{sec:design:bus}
+
+The bus delay model provides a \texttt{SEND}/\texttt{RECV} register
+pair backed by a bounded delay queue. A value written to \texttt{SEND}
+becomes visible at \texttt{RECV} only after
+%
+\begin{equation}
+  t_{\mathrm{deliver}} \;=\; t_{\mathrm{send}} + d + z\cdot\sigma_A,
+  \qquad z\sim\mathcal{N}(0,1),
+\end{equation}
+%
+where $d$ (\texttt{PropagationDelayNs}) is the deterministic
+propagation delay and $\sigma_A$ (\texttt{ArbitrationJitterNs}) models
+arbitration variance. The default $d = \SI{86806}{\nano\second}$ equals
+one UART frame (10 bits) at \SI{115200}{\baud}, the wire latency that
+stock Renode collapses to zero. \texttt{STATUS} exposes queue depth,
+and overflow beyond \texttt{MaxQueueDepth} drops messages and counts
+them in \texttt{STATS\_DROP}---reproducing the lossy behaviour of real
+buffered links.
+
+\section{Integration and Usage}
+\label{sec:design:integration}
+
+TFL is enabled entirely declaratively.
+\Cref{lst:repl} shows the complete TFL platform description used in the
+evaluation; \cref{lst:resc} shows the corresponding Renode script. An
+ablation configuration (clock-only, deadline-only, bus-only) is a
+three-line edit, satisfying goal G5.
+
+\begin{lstlisting}[language=repl, caption={TFL platform description
+  (\texttt{platforms/nucleo\_f103rb\_tfl.repl}). The base STM32F103
+  description is included unchanged; TFL components are added at
+  dedicated addresses.}, label={lst:repl}]
+using "platforms/cpus/stm32f103.repl"
+
+tfl_clock: Timers.TFL_ClockModel @ sysbus <0xE000E010, 0xE000E02F>
+    frequency: 72000000
+    DriftPpm:  25.0
+    JitterNs:  150.0
+
+tfl_monitor: Miscellaneous.TFL_DeadlineMonitor @ sysbus <0x50000000, 0x5000000F>
+    ExpectedPeriodNs: 1000000
+    MaxSamples: 10000
+
+tfl_bus: Miscellaneous.TFL_BusDelayModel @ sysbus <0x50001000, 0x5000101F>
+    PropagationDelayNs: 86806
+    ArbitrationJitterNs: 500.0
+    MaxQueueDepth: 64
+\end{lstlisting}
+
+\begin{lstlisting}[language=resc, caption={Renode execution script
+  (\texttt{scripts/tfl\_full.resc}). The \texttt{i} directive compiles
+  and loads the TFL C\# sources at runtime---Renode itself is never
+  rebuilt.}, label={lst:resc}]
+i @peripherals/TFL_ClockModel.cs
+i @peripherals/TFL_DeadlineMonitor.cs
+i @peripherals/TFL_BusDelayModel.cs
+mach create "nucleo_f103rb_tfl_full"
+machine LoadPlatformDescription @platforms/nucleo_f103rb_tfl.repl
+sysbus.cpu PerformanceInMips 72
+sysbus LoadELF @firmware/binaries/timing_probe_nucleo_f103rb.elf
+start
+\end{lstlisting}
+
+\paragraph{Limitations by design.} TFL does not model
+microarchitectural instruction timing (\srcS{1}) and does not change
+how Renode recognises interrupts (\srcS{2}); the quantum remains the
+lower bound for event granularity. \Cref{sec:eval:quantum} shows how
+the residual \srcS{2}/\srcS{4} error scales with the quantum, and
+\cref{sec:eval:discussion} discusses the consequences.

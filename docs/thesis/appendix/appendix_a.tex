@@ -1,0 +1,38 @@
+% =====================================================================
+\chapter{Hardware Setup}
+\label{app:hardware}
+% =====================================================================
+
+\section{Signal Mapping}
+
+\begin{table}[hb]
+  \centering
+  \caption[GPIO marker to logic-analyser mapping]{GPIO marker signals,
+    NUCLEO-F103RB pins, and Saleae Logic~8 channel assignment.}
+  \label{tab:pinmap}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Signal & Purpose & Nucleo pin & Analyser channel \\
+    \midrule
+    Marker 0 & Primary timing event    & PA0 (CN7 pin 28)  & CH0 \\
+    Marker 1 & Test envelope           & PA1 (CN7 pin 30)  & CH1 \\
+    Marker 2 & Sub-test delimiter      & PA4 (CN7 pin 32)  & CH2 \\
+    Marker 3 & Load-thread activity    & PA8 (CN10 pin 23) & CH3 \\
+    GND      & Common ground           & CN7 pin 20        & GND \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Capture Configuration}
+
+\begin{itemize}
+  \item Saleae Logic 8, digital capture at \SI{100}{\mega\sample\per\second}
+        (\SI{10}{\nano\second} timestamp resolution), 4 channels,
+        \SI{3.3}{\volt} logic threshold.
+  \item Board powered via ST-LINK USB; UART console (USART2,
+        \SI{115200}{\baud}) logged in parallel for scenario
+        delimitation.
+  \item Ambient temperature \SIrange{21}{24}{\degreeCelsius} during all
+        capture sessions (relevant for oscillator drift).
+\end{itemize}
