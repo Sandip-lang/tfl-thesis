@@ -1,0 +1,17 @@
+﻿# nucleo_f103rb_tfl.repl
+using "platforms/cpus/stm32f103.repl"
+
+tfl_clock: Timers.TFL_ClockModel @ sysbus <0xE000E010, 0xE000E02F>
+    frequency: 72000000
+    DriftPpm:  25.0
+    JitterNs:  150.0
+
+tfl_monitor: Miscellaneous.TFL_DeadlineMonitor @ sysbus <0x50000000, 0x5000000F>
+    ExpectedPeriodNs: 1000000
+    OutputCsvPath: "C:\\temp\\tfl_deadlines.csv"
+    MaxSamples: 10000
+
+tfl_bus: Miscellaneous.TFL_BusDelayModel @ sysbus <0x50001000, 0x5000101F>
+    PropagationDelayNs: 86806
+    ArbitrationJitterNs: 500.0
+    MaxQueueDepth: 64
